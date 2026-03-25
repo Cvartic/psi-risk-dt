@@ -1,0 +1,64 @@
+udp_flood:
+
+  low:
+    output_file: udp_flood_low.jsonl
+    params:
+      n_bots: 50
+      duration_s: 60
+
+
+  mid:
+    output_file: udp_flood_mid.jsonl
+    params:
+      n_bots: 100
+      duration_s: 120
+
+
+  high:
+    output_file: udp_flood_high.jsonl
+    params:
+      n_bots: 500
+      duration_s: 300
+
+
+# =============================================================================
+escalation_attack:
+
+  low:
+    output_file: escalation_low.jsonl
+    params:
+      phase_rampup_duration_s: 45
+      saturation_rate_pps: 300
+
+  mid:
+    output_file: escalation_mid.jsonl
+    params:
+      phase_rampup_duration_s: 90
+      saturation_rate_pps: 600
+
+  high:
+    output_file: escalation_high.jsonl
+    params:
+      phase_rampup_duration_s: 180
+      saturation_rate_pps: 1000
+
+# =============================================================================
+zero_day_like:
+
+  low:
+    output_file: zero_day_like_low.jsonl
+    params:
+      n_sources: 5
+      silence_mean_ms: 15000
+
+  mid:
+    output_file: zero_day_like_mid.jsonl
+    params:
+      n_sources: 15
+      silence_mean_ms: 8000
+
+  high:
+    output_file: zero_day_like_high.jsonl
+    params:
+      n_sources: 30
+      silence_mean_ms: 4000

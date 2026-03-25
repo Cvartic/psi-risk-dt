@@ -1,0 +1,69 @@
+#General config
+seed: 42
+
+udp_flood:
+  # Botnet size
+  n_bots: 100                   # numero nodi bot attivi
+
+  # Packet rate
+  base_rate_pps: 200            # pkt/s per bot all'inizio dell'attacco
+  rate_increment_pps: 100       # incremento per ogni step di escalation
+  max_rate_pps: 1000            # cap massimo (peak Mirai-like)
+
+  # Timing
+  duration_s: 120               # durata totale dell'attacco
+  escalation_step_s: 10         # ogni quanti secondi aumenta il rate
+
+  # Payload
+  payload_min_bytes: 64
+  payload_max_bytes: 1400
+
+  # Network
+  target_ip: "192.168.1.1"
+
+
+escalation_attack:
+
+  target_ip: "192.168.1.1"
+
+  # Phase durations
+  phase_stealth_duration_s:     45    # quanto dura la fase stealth
+  phase_rampup_duration_s:      90    # quanto dura la fase di ramp-up
+  phase_saturation_duration_s:  45    # quanto dura la saturazione finale
+
+  # Phase 0 - Stealth
+  stealth_n_bots:        20           # bot attivi in fase stealth
+  stealth_rate_pps:       5           # pkt/s per bot
+  stealth_payload_min:   64
+  stealth_payload_max:  256
+
+  # Phase 2 - Saturation
+  saturation_n_bots:    300           # bot al picco
+  saturation_rate_pps:  600           # pkt/s per bot al picco
+  saturation_payload_min: 512
+  saturation_payload_max: 1400
+
+
+entropy_anomaly:
+  target_ip:   "192.168.1.1"
+  duration_s:  240
+
+  n_sources: 15
+
+  burst_rate_pps:          400
+  burst_duration_min_ms:   500
+  burst_duration_max_ms:  3000
+
+  silence_mean_ms:  8000
+  silence_min_ms:   2000
+  silence_max_ms:  30000
+
+  beacon_leak_rate_pps: 10
+
+  sus_ports:  [4444, 6666, 31337, 8888, 9999]
+  port_sigma:  20
+
+  payload_clusters:
+    - [64,   10]
+    - [512,  80]
+    - [1400, 30]
