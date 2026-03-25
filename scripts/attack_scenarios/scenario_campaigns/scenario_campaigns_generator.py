@@ -65,6 +65,7 @@ def run_generator(script: Path, config_path: Path, output_file: Path) -> bool:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             print(f"  [ERROR] Generator exited {result.returncode}")
+            print(f"  STDERR:\n{result.stderr}")
             return False
         print(f"  [OK] → {output_file}")
         return True
@@ -78,9 +79,17 @@ def run_generator(script: Path, config_path: Path, output_file: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # move to attack scenarios root for consistent paths
+    import os
+    abspath = os.path.abspath(__file__)
+    dname = os.path.dirname(abspath)
+    os.chdir(dname)
+    os.chdir("..") 
+
+    
     campaigns_path = Path("scenario_campaigns_config.yaml")
     base_config_path = Path("scenario_config.yaml")
-    output_dir = Path("logs")
+    output_dir = Path("../../data/attack_scenarios")
 
     # Validate inputs
     if not campaigns_path.exists():
