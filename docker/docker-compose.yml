@@ -1,0 +1,10 @@
+services:
+  psi-risk-dt:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: psi-risk-dt
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../:/workspace
