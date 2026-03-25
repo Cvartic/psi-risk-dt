@@ -12,8 +12,8 @@ A minimalistic digital twin lab for the psi-risk-dt framework.
 ## Quick Start
 1. Make sure Docker Engine is running
 2. Build and start containers:
-   ```bash
-   ./scripts/run_all.sh
+   ```
+   bash ./scripts/run_all.sh
    ```
 
 ## Requirements
