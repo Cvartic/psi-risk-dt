@@ -4,7 +4,7 @@ A minimalistic digital twin lab for the psi-risk-dt framework.
 
 ## Structure
 - `src/` — Core Python modules for digital twin, entropy, and risk signal
-- `scripts/` — Utility scripts for dataset generation and orchestration
+- `scripts/` — Utility scripts for dataset generation, formatting and pipeline orchestration
 - `data/` — Baseline and attack datasets
 - `docker/` — Docker Compose and Dockerfile for environment setup
 - `results/` — Output logs and figures
@@ -21,3 +21,4 @@ A minimalistic digital twin lab for the psi-risk-dt framework.
 
 ## Main Features
 - Attack scenarios dataset generators
+- Sliding windows feature extraction from generated dataset
