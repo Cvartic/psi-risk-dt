@@ -62,7 +62,7 @@ def run_generator(script: Path, config_path: Path, output_file: Path) -> bool:
     print(f"  CMD: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=False, text=True)
         if result.returncode != 0:
             print(f"  [ERROR] Generator exited {result.returncode}")
             print(f"  STDERR:\n{result.stderr}")

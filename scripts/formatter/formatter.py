@@ -6,6 +6,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Generator, Iterator
 
+from scipy.stats import entropy
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -30,23 +32,23 @@ DEFAULT_FIELDS = {
 
 
 # ---------------------------------------------------------------------------
-# Math helpers
+# Metrics
 # ---------------------------------------------------------------------------
 
 def shannon_entropy(values: list) -> float:
     """
-    Shannon entropy H = -Σ p_i * log2(p_i)  (bits).
+    Shannon entropy H = -Σ p_i * log2(p_i) (bits).
+    Uses scipy.stats.entropy.
     Returns 0.0 for empty or single-element sequences.
     """
     n = len(values)
-    if n == 0:
+    if n <= 1:
         return 0.0
+
     counts = Counter(values)
-    return -sum(
-        (c / n) * math.log2(c / n)
-        for c in counts.values()
-        if c > 0
-    )
+    probabilities = [c / n for c in counts.values()]
+
+    return entropy(probabilities, base=2)
 
 
 def std_dev(values: list[float]) -> float:

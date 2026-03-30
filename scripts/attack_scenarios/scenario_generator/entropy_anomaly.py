@@ -71,7 +71,7 @@ def build_burst_schedule(config: dict) -> List[dict]:
             config["burst_duration_min_ms"],
             config["burst_duration_max_ms"]
         )
-        # every ~3 bursts, a longer burst to simulate a wave
+        # every ~3 bursts, a longer burst
         if burst_id % 3 == 2:
             burst_dur = round(burst_dur * random.uniform(1.5, 2.5))
 
@@ -90,14 +90,17 @@ def build_burst_schedule(config: dict) -> List[dict]:
 
         # --- silence ---
         # lambda varies sinusoidally over the attack duration to create a mix of short and long silences
-        lambda_base = 1000.0 / config["silence_mean_ms"]
+        lambda_base = 1.0 / config["silence_mean_ms"]
         lambda_now  = lambda_base * (1 + 0.5 * math.sin(2 * math.pi * t / total_ms))
         silence_dur = round(random.expovariate(lambda_now))
+        print(f"[DEBUG] t={t}ms  lambda={lambda_now:.4f}  raw_silence_dur={silence_dur}ms")
         silence_dur = min(
             max(silence_dur, config["silence_min_ms"]),
             config["silence_max_ms"]
         )
+        print(f"[DEBUG] Burst {burst_id} → adjusted silence duration: {silence_dur} ms")
         silence_dur = min(silence_dur, total_ms - t)
+        print(f"[DEBUG] Burst {burst_id} → silence duration: {silence_dur} ms (lambda={lambda_now:.1f})")
         schedule.append({
             "type":     "silence",
             "start":    t,
