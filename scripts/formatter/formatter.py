@@ -147,7 +147,7 @@ def extract_features(
     """
     n = len(window)
 
-    duration = t_end - t_start  # seconds
+    duration = (t_end - t_start) / 1000.0  # seconds
 
     # ── Feature 1: Traffic rate (pkt/s) ──────────────────────────────────
     traffic_rate = n / duration if duration > 0 else 0.0
@@ -167,7 +167,6 @@ def extract_features(
     # ── Feature 5: Std-dev of inter-packet gaps (ms) ──────────────────────
     timestamps = [p["timestamp"] for p in window]
     ipgs = inter_packet_gaps_ms(timestamps)
-    print(f"DEBUG: window {window_id}  ipgs={ipgs}", file=sys.stderr)
     std_ipg = std_dev(ipgs)
 
     return {
@@ -264,7 +263,7 @@ def main() -> None:
         type=float,
         default=None,
         metavar="MILLISECONDS",
-        help="Window stride in ms (default: equal to --window, i.e. tumbling)",
+        help="Window stride in ms (default: equal to --window / 2)",
     )
     args = parser.parse_args()
 
@@ -311,8 +310,8 @@ def main() -> None:
             out_fh.write("\n")
 
     # ── Summary ────────────────────────────────────────────────────────────
-    print_summary(records, input_path, output_path)
-    #print(f"[INFO] Wrote {len(records):,} windows → {output_path}", file=sys.stderr)
+    #print_summary(records, input_path, output_path)
+    print(f"[INFO] Wrote {len(records):,} windows → {output_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":
