@@ -12,3 +12,7 @@ docker-compose -f ../docker/docker-compose.yml up -d --build
 echo "Generating attack scenarios..."
 docker exec -it psi-risk-dt python scripts/attack_scenarios/scenario_campaigns/scenario_campaigns_generator.py
 
+#format the generated scenarios
+echo "Formatting the generated scenarios..."
+docker exec -it psi-risk-dt python scripts/formatter/batch_formatter.py
+
