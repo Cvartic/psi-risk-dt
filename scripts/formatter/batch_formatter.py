@@ -157,6 +157,15 @@ def main() -> None:
             args.window, stride,
         )
         results.append((filename, ok, "OK" if ok else "FAILED"))
+        
+    #baseline
+    ok = run_formatter(
+        formatter,
+        Path("data/baseline/normal_traffic_simulation.jsonl"),
+        features_dir / "normal_traffic_windows.jsonl",
+        args.window, stride,
+    )
+    results.append(("normal_traffic_simulation.jsonl", ok, "OK" if ok else "FAILED"))
 
     # ── Final summary table ──────────────────────────────────────────────────
     passed  = sum(1 for _, ok, _ in results if ok)

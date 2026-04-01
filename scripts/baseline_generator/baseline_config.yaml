@@ -1,0 +1,19 @@
+normal_traffic:
+
+  duration_s:   300           # lunga per stimare H_baseline stabile
+  n_devices:     30           # dispositivi IoT attivi
+  subnet_base:  "192.168.1"  # subnet locale dei dispositivi
+
+  # ── Heartbeat ─────────────────────────────────────────────────────
+  heartbeat_rate_pps:     0.5   # pkt/s per device (1 pkt ogni 2s)
+  heartbeat_payload_min:   32
+  heartbeat_payload_max:   96
+
+  # ── DNS / NTP ──────────────────────────────────────────────────────
+  dns_ntp_rate_pps:       0.03 
+
+  # ── Cloud transfer ─────────────────────────────────────────────────
+  cloud_rate_pps:          1.0  # pkt/s per device in idle
+
+  # ── Control inter-device ───────────────────────────────────────────
+  control_rate_pps:        0.5  # pkt/s per coppia di device
