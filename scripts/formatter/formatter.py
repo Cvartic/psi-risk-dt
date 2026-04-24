@@ -121,15 +121,12 @@ def sliding_windows(
     t_max = packets[-1]["timestamp"]
 
     t_start = t_min
-    t_end = t_start + window_ms
-        
-    while t_end != t_max:
-        t_end = t_start + window_ms
-        if t_end > t_max:
-            t_end = t_max
-    
+    while t_start < t_max:
+        t_end = min(t_start + window_ms, t_max)
         window = [p for p in packets if t_start <= p["timestamp"] < t_end]
         yield t_start, t_end, window
+        if t_end == t_max:
+            break
         t_start += stride_ms
 
 
@@ -256,9 +253,9 @@ def main() -> None:
     parser.add_argument(
         "--window", "-w",
         type=float,
-        default=1.0,
+        default=1000.0,
         metavar="MILLISECONDS",
-        help="Sliding window width in ms (default: 1.0)",
+        help="Sliding window width in ms (default: 1000.0)",
     )
     parser.add_argument(
         "--stride", "-s",

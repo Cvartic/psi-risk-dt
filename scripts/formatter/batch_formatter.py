@@ -45,8 +45,8 @@ def run_formatter(
         sys.executable, str(formatter),
         str(input_file),
         "--output", str(output_file),
-        "--window", str(window),
-        "--stride", str(stride),
+        "--window", str(window * 1000),
+        "--stride", str(stride * 1000),
     ]
 
     print(f"  $ {' '.join(cmd)}")
@@ -99,9 +99,9 @@ def main() -> None:
     parser.add_argument(
         "--window", "-w",
         type=float,
-        default=5000.0,
+        default=5.0,
         metavar="SECONDS",
-        help="Sliding window width in seconds (default: 5000.0)",
+        help="Sliding window width in seconds (default: 5.0)",
     )
     parser.add_argument(
         "--stride", "-s",
