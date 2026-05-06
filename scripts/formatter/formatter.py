@@ -121,18 +121,41 @@ def sliding_windows(
     t_max = packets[-1]["timestamp"]
 
     t_start = t_min
-    while t_start < t_max:
-        t_end = min(t_start + window_ms, t_max)
+    t_end = t_start + window_ms
+        
+    while t_end != t_max:
+        t_end = t_start + window_ms
+        if t_end > t_max:
+            t_end = t_max
+    
         window = [p for p in packets if t_start <= p["timestamp"] < t_end]
         yield t_start, t_end, window
-        if t_end == t_max:
-            break
         t_start += stride_ms
 
 
 # ---------------------------------------------------------------------------
 # Feature extraction
 # ---------------------------------------------------------------------------
+
+def aggregate_phase(window: list[dict]) -> str:
+    """
+    Most-common phase_name across the packets of a window.
+
+    Each scenario generator now writes a `phase_name` on every packet event:
+      - udp_flood          → "flood"
+      - escalation_attack  → "stealth" / "rampup" / "saturation"
+      - entropy_anomaly    → "burst" / "silence"
+
+    For legacy logs without `phase_name`, returns "unknown" so the
+    downstream consumer can fall back to its own inference.
+    """
+    if not window:
+        return "unknown"
+    names = [p.get("phase_name") for p in window if p.get("phase_name")]
+    if not names:
+        return "unknown"
+    return Counter(names).most_common(1)[0][0]
+
 
 def extract_features(
     t_start: int,
@@ -177,7 +200,8 @@ def extract_features(
         "entropy_dst_port":   round(h_dst_port, 6),
         "entropy_src_ip":     round(h_src_ip, 6),
         "entropy_payload_sz": round(h_payload, 6),
-        "std_jitter_ms":      round(std_ipg)
+        "std_jitter_ms":      round(std_ipg),
+        "phase":              aggregate_phase(window),
     }
 
 

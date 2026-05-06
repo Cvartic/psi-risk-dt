@@ -21,6 +21,7 @@ class PacketEvent:
     traffic_class:  int       # 0=heartbeat, 1=dns_ntp, 2=cloud, 3=control
     class_name:     str
     label:          str = "normal"
+    phase_name:     str = "baseline"   # uniform label for the whole campaign
 
 
 # ---------------------------------------------------------------------------

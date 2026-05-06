@@ -100,6 +100,24 @@ TIERS: list[str] = ["low", "mid", "high"]
 # Phases that represent stealth / silence windows (thesis §5.5.2)
 STEALTH_PHASES: set[str] = {"stealth", "silence", "rampup_low"}
 
+# ---------------------------------------------------------------------------
+# Loader-side calibration constants — see §"Loader patch" in the tech note.
+# These DO NOT change the gating logic or the neural weights; they only convert
+# the formatter's raw output into the [0,1] feature space the scorer assumes.
+# ---------------------------------------------------------------------------
+
+# Reference cap used to map bit-domain Shannon entropies to ~[0,1].
+# Observed range across the campaign datasets: roughly 1.5 – 10 bits, so
+# dividing by 10 yields a feature whose dynamic range is meaningful before
+# the [0,1] clamp inside _neural_score.
+_ENTROPY_REF_BITS: float = 10.0
+
+# Entropy-deviation threshold τ_s used when exceedsTauS is not pre-written
+# in the JSONL.  Calibrated against normal_traffic baseline: a 1-bit
+# entropy departure on the destination-port distribution is a clear
+# anomaly (cf. udp_flood: ΔH ≈ 7+, escalation stealth: ΔH ≈ 0.6).
+TAU_S: float = 1.0
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -159,22 +177,40 @@ def _file_name(scenario: str, tier: str) -> str:
     return f"{scenario}_{tier}_windows.jsonl"
 
 
+def _normalise_phase(scenario: str, tier: str, phase: str) -> str:
+    """Apply tier-specific renames to the phase emitted by the formatter so the
+    FNR / STEALTH_PHASES semantics of §5.5.2 hold.
+
+    The formatter emits the natural label coming out of the generator
+    (``stealth``/``rampup``/``saturation``/``flood``/``burst``/``silence``/``baseline``)
+    and is intentionally tier-agnostic.  STEALTH_PHASES however distinguishes
+    ``rampup_low`` (low tier of escalation_attack — a phase that the thesis
+    treats as low-visibility) from a generic ``rampup``.  This helper does
+    the rename in one place.
+    """
+    if scenario == "escalation" and tier == "low" and phase == "rampup":
+        return "rampup_low"
+    if scenario == "udp_flood" and tier == "low" and phase == "flood":
+        return "flood_low"
+    return phase
+
+
 def load_windows(data_dir: str | Path, scenario: str, tier: str) -> list[Window]:
     """Parse all windows from a *_windows.jsonl file.
 
-    Parameters
-    ----------
-    data_dir:
-        Directory containing the JSONL files.
-    scenario:
-        One of 'udp_flood', 'escalation', 'zero_day_like', 'normal_traffic'.
-    tier:
-        One of 'low', 'mid', 'high' (ignored for normal_traffic).
+    Compatibility: the field names emitted by ``scripts/formatter/formatter.py``
+    are accepted directly (``traffic_rate_pps``, ``entropy_dst_port``, ...) and
+    aliased to the f1..f5 vector the scorer expects.  Entropy values are
+    additionally divided by ``_ENTROPY_REF_BITS`` to land in ~[0,1] before the
+    [0,1] clamp inside ``_neural_score`` — without this normalisation the
+    entropies (in bits, range ≈ 1.5–10) saturate the clamp and lose their
+    discriminative signal.  This is a data-preparation fix, not a change to
+    the gating logic or to NEURAL_WEIGHTS.
 
-    Returns
-    -------
-    list[Window]
-        Parsed window objects, in file order.
+    The window's ``phase`` field is required and is written by the formatter
+    (``scripts/formatter/formatter.py``); a missing ``phase`` raises
+    ``ValueError``.  ``delta_h`` and ``exceeds_tau_s`` are filled in by
+    ``_augment_with_baseline`` once every dataset is loaded.
     """
     path = Path(data_dir) / _file_name(scenario, tier)
     if not path.exists():
@@ -191,26 +227,60 @@ def load_windows(data_dir: str | Path, scenario: str, tier: str) -> list[Window]
             except json.JSONDecodeError as exc:
                 raise ValueError(f"JSON parse error at {path}:{line_no}: {exc}") from exc
 
-            # Robust boolean parsing for exceedsTauS
-            ets_raw = raw.get("exceeds_tau_s", raw.get("exceedsTauS", False))
-            if isinstance(ets_raw, str):
+            # ── feature aliases ─────────────────────────────────────────────
+            # f1 = traffic_rate_pps  (left in raw pps; normalised by f1_max in scorer)
+            # f2..f4 = Shannon entropies in bits, divided by _ENTROPY_REF_BITS
+            # f5 = std_jitter_ms     (raw; normalised by _F5_DIVISOR in scorer)
+            f1_raw = float(raw.get("f1", raw.get("traffic_rate_pps", 0.0)))
+            f2_raw = float(raw.get("f2", raw.get("entropy_dst_port",   0.0)))
+            f3_raw = float(raw.get("f3", raw.get("entropy_src_ip",     0.0)))
+            f4_raw = float(raw.get("f4", raw.get("entropy_payload_sz", 0.0)))
+            f5_raw = float(raw.get("f5", raw.get("std_jitter_ms",      0.0)))
+
+            f2 = f2_raw / _ENTROPY_REF_BITS
+            f3 = f3_raw / _ENTROPY_REF_BITS
+            f4 = f4_raw / _ENTROPY_REF_BITS
+
+            # ── exceedsTauS / delta_h: read if pre-computed, else placeholder.
+            #    Real values are filled in by _augment_with_baseline once
+            #    every dataset has been loaded (we need normal_traffic).
+            ets_raw = raw.get("exceeds_tau_s", raw.get("exceedsTauS", None))
+            if ets_raw is None:
+                exceeds_tau_s = False
+            elif isinstance(ets_raw, str):
                 exceeds_tau_s = ets_raw.lower() in {"true", "1", "yes"}
             else:
                 exceeds_tau_s = bool(ets_raw)
+
+            # ── phase: read from the JSONL where the formatter writes it,
+            #          then apply the tier-specific rename that promotes
+            #          "rampup" → "rampup_low" (and "flood" → "flood_low")
+            #          on the low tier so the FNR / STEALTH_PHASES semantics
+            #          of §5.5.2 hold.  If the field is missing, the data is
+            #          stale: re-run the formatter rather than fall back to
+            #          inference (single source of truth).
+            raw_phase = str(raw.get("phase", "")).strip()
+            if not raw_phase:
+                raise ValueError(
+                    f"{path}:{line_no}: window record is missing the 'phase' "
+                    f"field — re-run scripts/formatter/batch_formatter.py "
+                    f"against freshly generated packet logs."
+                )
+            phase = _normalise_phase(scenario, tier, raw_phase)
 
             w = Window(
                 window_id=str(raw.get("window_id", f"w{line_no}")),
                 t_start=float(raw.get("t_start", 0.0)),
                 t_end=float(raw.get("t_end", 0.0)),
                 n_packets=int(raw.get("n_packets", 0)),
-                f1=float(raw.get("f1", 0.0)),
-                f2=float(raw.get("f2", 0.0)),
-                f3=float(raw.get("f3", 0.0)),
-                f4=float(raw.get("f4", 0.0)),
-                f5=float(raw.get("f5", 0.0)),
+                f1=f1_raw,
+                f2=f2,
+                f3=f3,
+                f4=f4,
+                f5=f5_raw,
                 delta_h=float(raw.get("delta_h", 0.0)),
                 exceeds_tau_s=exceeds_tau_s,
-                phase=str(raw.get("phase", "unknown")),
+                phase=phase,
                 config=str(raw.get("config", "neural-only")),
             )
             windows.append(w)
@@ -264,7 +334,8 @@ def _neural_score(w: Window, f1_max: float) -> float:
 
     features = [f1_norm, f2_norm, f3_norm, f4_norm, f5_norm]
     score = sum(wt * ft for wt, ft in zip(NEURAL_WEIGHTS, features))
-    return round(min(max(score, 0.0), 1.0), 6)
+    res = round(min(max(score, 0.0), 1.0), 6)
+    return res
 
 
 # ---------------------------------------------------------------------------
@@ -507,6 +578,12 @@ def get_risk_timeline(
 ) -> dict[str, list[Any]]:
     """Return the per-window risk score timeline for both pipeline configurations.
 
+    The function loads **every** scenario in ``data_dir`` (not just the one
+    requested) so that the baseline-driven augmentation (`_augment_with_baseline`)
+    has access to ``normal_traffic`` and can compute ``delta_h`` / ``exceeds_tau_s``
+    correctly.  Without this, the symbolic gate would never fire on the
+    timeline — see the regression that prompted this fix.
+
     Parameters
     ----------
     scenario:
@@ -515,27 +592,31 @@ def get_risk_timeline(
         One of 'low', 'mid', 'high'.  Ignored for normal_traffic.
     data_dir:
         Path to the directory containing *_windows.jsonl files.
-
-    Returns
-    -------
-    dict with keys:
-        'windows'       : list of window_id strings
-        'neural_only'   : list of float risk scores (neural-only config)
-        'neurosymbolic' : list of float risk scores (NeSy config)
-        'phases'        : list of ground-truth phase labels
-        'gate_fired'    : list of bool — True when symbolic gate activated
-        't_start'       : list of float timestamps
-        't_end'         : list of float timestamps
     """
-    all_windows = _load_and_score(scenario, tier, data_dir)
+    all_data = _load_all_windows(data_dir)
+    if not all_data:
+        raise RuntimeError(
+            f"No JSONL files found in '{data_dir}'."
+        )
+
+    key = (scenario, "" if scenario == "normal_traffic" else tier)
+    if key not in all_data:
+        raise FileNotFoundError(
+            f"Dataset for {scenario}/{tier or '—'} not found in '{data_dir}'."
+        )
+
+    f1_max = _global_f1_max(all_data)
+    target_windows = all_data[key]
+    score_all(target_windows, f1_max)
+
     return {
-        "windows": [w.window_id for w in all_windows],
-        "neural_only": [w.neural_only_risk for w in all_windows],
-        "neurosymbolic": [w.neurosymbolic_risk for w in all_windows],
-        "phases": [w.phase for w in all_windows],
-        "gate_fired": [w.gate_fired for w in all_windows],
-        "t_start": [w.t_start for w in all_windows],
-        "t_end": [w.t_end for w in all_windows],
+        "windows": [w.window_id for w in target_windows],
+        "neural_only": [w.neural_only_risk for w in target_windows],
+        "neurosymbolic": [w.neurosymbolic_risk for w in target_windows],
+        "phases": [w.phase for w in target_windows],
+        "gate_fired": [w.gate_fired for w in target_windows],
+        "t_start": [w.t_start for w in target_windows],
+        "t_end": [w.t_end for w in target_windows],
     }
 
 
@@ -557,8 +638,62 @@ def _load_and_score(
     return windows
 
 
+def _augment_with_baseline(
+    all_data: dict[tuple[str, str], list[Window]],
+) -> None:
+    """Fill in delta_h and exceeds_tau_s for every loaded window.
+
+    Uses normal_traffic as the entropy baseline.  ΔH_t is the **maximum**
+    absolute entropy deviation across the three entropy features
+    (``dst_port``, ``src_ip``, ``payload_sz``), in bits — this captures any
+    single-feature anomaly regardless of which one the adversary stresses.
+    ``exceeds_tau_s`` is set to ``ΔH_t > TAU_S``.
+
+    Rationale (§5.5.2):
+        - entropy_dst_port    → port-mixing / scanning
+        - entropy_src_ip      → spoofing / botnet diversity
+        - entropy_payload_sz  → payload polymorphism
+
+    Taking the max preserves invariance to which feature is anomalous, and
+    matches the multi-dimensional definition of ΔH_t in the thesis far more
+    faithfully than projecting on dst_port alone.
+
+    Operates in-place; no-op when normal_traffic isn't present.
+    """
+    baseline_windows = all_data.get(("normal_traffic", ""))
+    if not baseline_windows:
+        return  # cannot augment without a baseline
+
+    # Baseline entropies in bits — Window stores entropies divided by
+    # _ENTROPY_REF_BITS, so multiply back to bits before averaging.
+    baseline_dst_port = statistics.mean(
+        w.f2 * _ENTROPY_REF_BITS for w in baseline_windows
+    )
+    baseline_src_ip = statistics.mean(
+        w.f3 * _ENTROPY_REF_BITS for w in baseline_windows
+    )
+    baseline_payload = statistics.mean(
+        w.f4 * _ENTROPY_REF_BITS for w in baseline_windows
+    )
+
+    for (scenario, _), windows in all_data.items():
+        for w in windows:
+            if scenario == "normal_traffic":
+                w.delta_h = 0.0
+                w.exceeds_tau_s = False
+                continue
+            d_dst_port = abs(w.f2 * _ENTROPY_REF_BITS - baseline_dst_port)
+            d_src_ip   = abs(w.f3 * _ENTROPY_REF_BITS - baseline_src_ip)
+            d_payload  = abs(w.f4 * _ENTROPY_REF_BITS - baseline_payload)
+            w.delta_h = round(max(d_dst_port, d_src_ip, d_payload), 6)
+            w.exceeds_tau_s = (w.delta_h > TAU_S)
+
+
 def _load_all_windows(data_dir: str | Path) -> dict[tuple[str, str], list[Window]]:
     """Load every available JSONL file, skip missing ones gracefully.
+
+    After loading, runs the baseline-driven augmentation that fills in
+    ``delta_h`` / ``exceeds_tau_s`` on every window
 
     Returns a dict keyed by (scenario, tier).
     """
@@ -578,6 +713,7 @@ def _load_all_windows(data_dir: str | Path) -> dict[tuple[str, str], list[Window
         except FileNotFoundError:
             pass  # silently skip missing datasets
 
+    _augment_with_baseline(all_data)
     return all_data
 
 
@@ -798,4 +934,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import os
+    abspath = os.path.abspath(__file__)
+    dname = os.path.dirname(abspath)
+    os.chdir(dname)
+    os.chdir("..")  # project root
     main()
