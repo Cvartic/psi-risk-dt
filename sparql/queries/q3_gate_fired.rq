@@ -1,0 +1,29 @@
+# Query 3 — §5.7.3
+# Windows on which the Ψ gate fired under the neurosymbolic configuration:
+# joins the explanation text and the mitigation hint, only when both gating
+# conditions held jointly (ΔH_t > τ_s ∧ a_t > θ).
+
+PREFIX psi: <http://psi-risk-dt.insubria.it/ontology#>
+
+SELECT ?windowId ?tStart ?riskValue
+       ?explanationText ?hintText ?priority
+WHERE {
+  ?scn  a                  psi:Scenario ;
+        psi:scenarioName   "escalation_attack" ;
+        psi:produces       ?w .
+  ?w    a                  psi:Window ;
+        psi:windowId       ?windowId ;
+        psi:tStart         ?tStart ;
+        psi:hasEntropySignal ?es ;
+        psi:hasRiskScore   ?rs .
+  ?es   psi:exceedsTauS    true .
+  ?rs   psi:configuration  "neurosymbolic" ;
+        psi:activated      true ;
+        psi:scoreValue     ?riskValue ;
+        psi:hasExplanation ?expl ;
+        psi:suggests       ?hint .
+  ?expl psi:explanationText ?explanationText .
+  ?hint psi:hintText       ?hintText ;
+        psi:priority       ?priority .
+}
+ORDER BY ASC(?tStart)

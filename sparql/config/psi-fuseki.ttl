@@ -1,0 +1,26 @@
+@prefix :        <#> .
+@prefix fuseki:  <http://jena.apache.org/fuseki#> .
+@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+
+# =============================================================================
+# Fuseki assembler: in-memory dataset preloaded with ontology + example data.
+# Mounted at /staging inside the container.
+# =============================================================================
+
+:service a fuseki:Service ;
+    rdfs:label                "Ψ-Risk-DT trial endpoint" ;
+    fuseki:name               "psi" ;
+    fuseki:serviceQuery       "query", "sparql" ;
+    fuseki:serviceUpdate      "update" ;
+    fuseki:serviceReadGraphStore   "get" ;
+    fuseki:serviceReadWriteGraphStore "data" ;
+    fuseki:dataset            :ds .
+
+:ds a ja:RDFDataset ;
+    ja:defaultGraph :graph .
+
+:graph a ja:MemoryModel ;
+    ja:content [ ja:externalContent <file:///staging/ontology/psi_ontology.ttl> ] ;
+    ja:content [ ja:externalContent <file:///staging/data/example_data.ttl>     ] .

@@ -1,6 +1,6 @@
 services:
   psi-risk-dt:
-    build: 
+    build:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: psi-risk-dt
@@ -9,3 +9,22 @@ services:
     volumes:
       - ../:/workspace
     command: tail -f /dev/null
+
+  fuseki:
+    image: stain/jena-fuseki:latest
+    container_name: psi-fuseki
+    ports:
+      - "3030:3030"
+    environment:
+      ADMIN_PASSWORD: "psi-admin"
+    volumes:
+      - ../sparql:/staging:ro
+    # Bypass the assembler-config path: load both .ttl files directly into
+    # an in-memory dataset called /psi at startup.  Easier to debug because
+    # any parse error appears in `docker logs` immediately.
+    command: >
+      /jena-fuseki/fuseki-server
+      --update
+      --file=/staging/ontology/psi_ontology.ttl
+      --file=/staging/data/example_data.ttl
+      /psi

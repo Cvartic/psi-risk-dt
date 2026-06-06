@@ -1,0 +1,113 @@
+@prefix psi:  <http://psi-risk-dt.insubria.it/ontology#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# =============================================================================
+# Ψ-Risk-DT minimal ontology
+# Mirrors the eight classes described in §5.5.2 of the thesis, keeping the
+# exact property names so that the SPARQL queries of §5.7 run unchanged.
+# =============================================================================
+
+<http://psi-risk-dt.insubria.it/ontology>
+    a               owl:Ontology ;
+    rdfs:label      "Ψ-Risk-DT ontology"@en ;
+    rdfs:comment    "Vocabulary used by the Ψ-UI to query attack scenarios, sliding-window features, entropy signals, neuro-symbolic risk scores and the explanation / mitigation hints emitted by the Ψ gate."@en .
+
+# -----------------------------------------------------------------------------
+# Classes
+# -----------------------------------------------------------------------------
+
+psi:Scenario        a owl:Class ; rdfs:label "Scenario"@en .
+psi:Window          a owl:Class ; rdfs:label "Sliding window"@en .
+psi:FeatureVector   a owl:Class ; rdfs:label "Feature vector"@en .
+psi:EntropySignal   a owl:Class ; rdfs:label "Entropy signal"@en .
+psi:AttackPhase     a owl:Class ; rdfs:label "Attack phase"@en .
+psi:RiskScore       a owl:Class ; rdfs:label "Risk score"@en .
+psi:Explanation     a owl:Class ; rdfs:label "Explanation"@en .
+psi:MitigationHint  a owl:Class ; rdfs:label "Mitigation hint"@en .
+
+# -----------------------------------------------------------------------------
+# Object properties — match Table "Class definitions" of §5.5.2
+# -----------------------------------------------------------------------------
+
+psi:produces        a owl:ObjectProperty ; rdfs:domain psi:Scenario  ; rdfs:range psi:Window      .
+psi:containsPhase   a owl:ObjectProperty ; rdfs:domain psi:Scenario  ; rdfs:range psi:AttackPhase .
+
+psi:belongsTo       a owl:ObjectProperty ; rdfs:domain psi:Window    ; rdfs:range psi:Scenario    .
+psi:hasFeatureVector a owl:ObjectProperty ; rdfs:domain psi:Window   ; rdfs:range psi:FeatureVector .
+psi:hasEntropySignal a owl:ObjectProperty ; rdfs:domain psi:Window   ; rdfs:range psi:EntropySignal .
+psi:hasPhase        a owl:ObjectProperty ; rdfs:domain psi:Window    ; rdfs:range psi:AttackPhase .
+psi:hasRiskScore    a owl:ObjectProperty ; rdfs:domain psi:Window    ; rdfs:range psi:RiskScore   .
+
+psi:derivedFrom     a owl:ObjectProperty ; rdfs:domain psi:FeatureVector ; rdfs:range psi:Window  .
+psi:characterises   a owl:ObjectProperty ; rdfs:domain psi:EntropySignal ; rdfs:range psi:Window  .
+
+psi:annotates       a owl:ObjectProperty ; rdfs:domain psi:AttackPhase ; rdfs:range psi:Window    .
+
+psi:assignedTo      a owl:ObjectProperty ; rdfs:domain psi:RiskScore  ; rdfs:range psi:Window     .
+psi:hasExplanation  a owl:ObjectProperty ; rdfs:domain psi:RiskScore  ; rdfs:range psi:Explanation .
+psi:suggests        a owl:ObjectProperty ; rdfs:domain psi:RiskScore  ; rdfs:range psi:MitigationHint .
+
+psi:explains        a owl:ObjectProperty ; rdfs:domain psi:Explanation ; rdfs:range psi:RiskScore .
+psi:references      a owl:ObjectProperty ; rdfs:domain psi:Explanation ; rdfs:range psi:AttackPhase .
+
+psi:appliesTo       a owl:ObjectProperty ; rdfs:domain psi:MitigationHint ; rdfs:range psi:RiskScore .
+
+# -----------------------------------------------------------------------------
+# Datatype properties
+# -----------------------------------------------------------------------------
+
+# Scenario
+psi:scenarioName    a owl:DatatypeProperty ; rdfs:domain psi:Scenario ; rdfs:range xsd:string  .
+psi:tier            a owl:DatatypeProperty ; rdfs:domain psi:Scenario ; rdfs:range xsd:string  .
+psi:durationSec     a owl:DatatypeProperty ; rdfs:domain psi:Scenario ; rdfs:range xsd:decimal .
+
+# Window
+psi:windowId        a owl:DatatypeProperty ; rdfs:domain psi:Window ; rdfs:range xsd:int     .
+psi:tStart          a owl:DatatypeProperty ; rdfs:domain psi:Window ; rdfs:range xsd:decimal .
+psi:tEnd            a owl:DatatypeProperty ; rdfs:domain psi:Window ; rdfs:range xsd:decimal .
+psi:nPackets        a owl:DatatypeProperty ; rdfs:domain psi:Window ; rdfs:range xsd:int     .
+
+# FeatureVector
+psi:trafficRatePps    a owl:DatatypeProperty ; rdfs:domain psi:FeatureVector ; rdfs:range xsd:decimal .
+psi:entropyDstPort    a owl:DatatypeProperty ; rdfs:domain psi:FeatureVector ; rdfs:range xsd:decimal .
+psi:entropySrcIp      a owl:DatatypeProperty ; rdfs:domain psi:FeatureVector ; rdfs:range xsd:decimal .
+psi:entropyPayloadSz  a owl:DatatypeProperty ; rdfs:domain psi:FeatureVector ; rdfs:range xsd:decimal .
+psi:stdJitterMs       a owl:DatatypeProperty ; rdfs:domain psi:FeatureVector ; rdfs:range xsd:decimal .
+
+# EntropySignal
+psi:deltaH          a owl:DatatypeProperty ; rdfs:domain psi:EntropySignal ; rdfs:range xsd:decimal .
+psi:exceedsTauS     a owl:DatatypeProperty ; rdfs:domain psi:EntropySignal ; rdfs:range xsd:boolean .
+
+# AttackPhase
+psi:phaseName       a owl:DatatypeProperty ; rdfs:domain psi:AttackPhase ; rdfs:range xsd:string .
+psi:phaseOrdinal    a owl:DatatypeProperty ; rdfs:domain psi:AttackPhase ; rdfs:range xsd:int    .
+
+# RiskScore
+psi:scoreValue      a owl:DatatypeProperty ; rdfs:domain psi:RiskScore ; rdfs:range xsd:decimal .
+psi:configuration   a owl:DatatypeProperty ; rdfs:domain psi:RiskScore ; rdfs:range xsd:string  .
+psi:activated       a owl:DatatypeProperty ; rdfs:domain psi:RiskScore ; rdfs:range xsd:boolean .
+
+# Explanation
+psi:explanationText a owl:DatatypeProperty ; rdfs:domain psi:Explanation ; rdfs:range xsd:string   .
+psi:generatedAt     a owl:DatatypeProperty ; rdfs:domain psi:Explanation ; rdfs:range xsd:dateTime .
+psi:evidenceSparql  a owl:DatatypeProperty ; rdfs:domain psi:Explanation ; rdfs:range xsd:string   .
+
+# MitigationHint
+psi:hintText        a owl:DatatypeProperty ; rdfs:domain psi:MitigationHint ; rdfs:range xsd:string .
+psi:priority        a owl:DatatypeProperty ; rdfs:domain psi:MitigationHint ; rdfs:range xsd:int    .
+psi:referencedCVE   a owl:DatatypeProperty ; rdfs:domain psi:MitigationHint ; rdfs:range xsd:string .
+
+# -----------------------------------------------------------------------------
+# Canonical AttackPhase individuals (the seven labels listed in §5.5.2)
+# -----------------------------------------------------------------------------
+
+psi:Phase_Stealth     a psi:AttackPhase ; psi:phaseName "stealth"    ; psi:phaseOrdinal 0 .
+psi:Phase_RampUp      a psi:AttackPhase ; psi:phaseName "ramp-up"    ; psi:phaseOrdinal 1 .
+psi:Phase_Saturation  a psi:AttackPhase ; psi:phaseName "saturation" ; psi:phaseOrdinal 2 .
+psi:Phase_Burst       a psi:AttackPhase ; psi:phaseName "burst"      ; psi:phaseOrdinal 3 .
+psi:Phase_Silence     a psi:AttackPhase ; psi:phaseName "silence"    ; psi:phaseOrdinal 4 .
+psi:Phase_Flood       a psi:AttackPhase ; psi:phaseName "flood"      ; psi:phaseOrdinal 5 .
+psi:Phase_Baseline    a psi:AttackPhase ; psi:phaseName "baseline"   ; psi:phaseOrdinal 6 .

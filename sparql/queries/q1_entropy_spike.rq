@@ -1,0 +1,21 @@
+# Query 1 — §5.7.1
+# Windows of a given scenario whose entropy spike ΔH_t exceeds τ_s,
+# ordered by decreasing ΔH_t.  Primary triage query of the Ψ-UI.
+
+PREFIX psi: <http://psi-risk-dt.insubria.it/ontology#>
+
+SELECT ?windowId ?tStart ?nPackets ?deltaH
+WHERE {
+  ?scn  a                  psi:Scenario ;
+        psi:scenarioName   "escalation_attack" ;
+        psi:tier           "mid" ;
+        psi:produces       ?w .
+  ?w    a                  psi:Window ;
+        psi:windowId       ?windowId ;
+        psi:tStart         ?tStart ;
+        psi:nPackets       ?nPackets ;
+        psi:hasEntropySignal ?es .
+  ?es   psi:deltaH         ?deltaH ;
+        psi:exceedsTauS    true .
+}
+ORDER BY DESC(?deltaH)

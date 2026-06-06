@@ -1,0 +1,23 @@
+# Query 2 — §5.7.2
+# Windows belonging to the ramp-up phase of escalation_attack/mid, with
+# both the neural-only and the neurosymbolic risk scores side-by-side.
+
+PREFIX psi: <http://psi-risk-dt.insubria.it/ontology#>
+
+SELECT ?windowId ?tStart ?phaseName ?config ?scoreValue
+WHERE {
+  ?scn  a                  psi:Scenario ;
+        psi:scenarioName   "escalation_attack" ;
+        psi:tier           "mid" ;
+        psi:produces       ?w .
+  ?w    a                  psi:Window ;
+        psi:windowId       ?windowId ;
+        psi:tStart         ?tStart ;
+        psi:hasPhase       ?ph ;
+        psi:hasRiskScore   ?rs .
+  ?ph   psi:phaseName      ?phaseName .
+  FILTER(?phaseName = "ramp-up")
+  ?rs   psi:configuration  ?config ;
+        psi:scoreValue     ?scoreValue .
+}
+ORDER BY ASC(?tStart) ?config
