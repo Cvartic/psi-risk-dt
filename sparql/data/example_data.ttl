@@ -1,0 +1,194 @@
+@prefix psi: <http://psi-risk-dt.insubria.it/ontology#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# =============================================================================
+# Trial dataset for the Ψ-UI SPARQL endpoint.
+#
+# Mirrors the worked example of §5.6: window 19 of the escalation_attack/mid
+# campaign (t_start = 47.556 s, t_end = 52.556 s, 151 packets, ramp-up phase).
+# Two sibling windows are added — one stealth (w03) and one saturation (w27) —
+# so that Q1/Q2/Q3 of §5.7 each return interesting rows.
+#
+# Every window carries TWO RiskScore instances, one per configuration
+# (neural-only vs. neurosymbolic), as required by Q2.  Only the neurosymbolic
+# RiskScore on a window where exceedsTauS=true is marked activated=true and
+# carries an Explanation + MitigationHint, mirroring the gating rule
+# ΔH_t > τ_s ∧ a_t > θ described at the end of §5.7.
+# =============================================================================
+
+# ----- Scenario --------------------------------------------------------------
+
+psi:Scenario_escalation_mid
+    a                 psi:Scenario ;
+    psi:scenarioName  "escalation_attack" ;
+    psi:tier          "mid" ;
+    psi:durationSec   180.0 ;
+    psi:produces      psi:Window_w03,
+                      psi:Window_w19,
+                      psi:Window_w27 ;
+    psi:containsPhase psi:Phase_Stealth,
+                      psi:Phase_RampUp,
+                      psi:Phase_Saturation .
+
+# ============================================================================
+# Window w03 — stealth phase (no gate)
+# ============================================================================
+
+psi:Window_w03
+    a                    psi:Window ;
+    psi:windowId         3 ;
+    psi:tStart           15.000 ;
+    psi:tEnd             20.000 ;
+    psi:nPackets         24 ;
+    psi:belongsTo        psi:Scenario_escalation_mid ;
+    psi:hasFeatureVector psi:FV_w03 ;
+    psi:hasEntropySignal psi:ES_w03 ;
+    psi:hasPhase         psi:Phase_Stealth ;
+    psi:hasRiskScore     psi:RS_w03_no, psi:RS_w03_ns .
+
+psi:FV_w03  a psi:FeatureVector ;
+    psi:derivedFrom        psi:Window_w03 ;
+    psi:trafficRatePps     4.8 ;
+    psi:entropyDstPort     2.10 ;
+    psi:entropySrcIp       3.92 ;
+    psi:entropyPayloadSz   1.47 ;
+    psi:stdJitterMs        18.3 .
+
+psi:ES_w03  a psi:EntropySignal ;
+    psi:characterises      psi:Window_w03 ;
+    psi:deltaH             0.12 ;
+    psi:exceedsTauS        false .
+
+psi:RS_w03_no a psi:RiskScore ;
+    psi:assignedTo         psi:Window_w03 ;
+    psi:configuration      "neural-only" ;
+    psi:scoreValue         0.09 ;
+    psi:activated          false .
+
+psi:RS_w03_ns a psi:RiskScore ;
+    psi:assignedTo         psi:Window_w03 ;
+    psi:configuration      "neurosymbolic" ;
+    psi:scoreValue         0.11 ;
+    psi:activated          false .
+
+# ============================================================================
+# Window w19 — ramp-up phase (the worked example of §5.6)
+# Neural-only does NOT activate yet; neurosymbolic does.
+# ============================================================================
+
+psi:Window_w19
+    a                    psi:Window ;
+    psi:windowId         19 ;
+    psi:tStart           47.556 ;
+    psi:tEnd             52.556 ;
+    psi:nPackets         151 ;
+    psi:belongsTo        psi:Scenario_escalation_mid ;
+    psi:hasFeatureVector psi:FV_w19 ;
+    psi:hasEntropySignal psi:ES_w19 ;
+    psi:hasPhase         psi:Phase_RampUp ;
+    psi:hasRiskScore     psi:RS_w19_no, psi:RS_w19_ns .
+
+psi:FV_w19  a psi:FeatureVector ;
+    psi:derivedFrom        psi:Window_w19 ;
+    psi:trafficRatePps     30.2 ;
+    psi:entropyDstPort     4.85 ;
+    psi:entropySrcIp       5.31 ;
+    psi:entropyPayloadSz   2.66 ;
+    psi:stdJitterMs        9.7 .
+
+psi:ES_w19  a psi:EntropySignal ;
+    psi:characterises      psi:Window_w19 ;
+    psi:deltaH             0.74 ;
+    psi:exceedsTauS        true .
+
+psi:RS_w19_no a psi:RiskScore ;
+    psi:assignedTo         psi:Window_w19 ;
+    psi:configuration      "neural-only" ;
+    psi:scoreValue         0.46 ;
+    psi:activated          false .
+
+psi:RS_w19_ns a psi:RiskScore ;
+    psi:assignedTo         psi:Window_w19 ;
+    psi:configuration      "neurosymbolic" ;
+    psi:scoreValue         0.78 ;
+    psi:activated          true ;
+    psi:hasExplanation     psi:Expl_w19 ;
+    psi:suggests           psi:Mit_w19 .
+
+psi:Expl_w19 a psi:Explanation ;
+    psi:explains           psi:RS_w19_ns ;
+    psi:references         psi:Phase_RampUp ;
+    psi:generatedAt        "2025-09-12T14:23:08Z"^^xsd:dateTime ;
+    psi:explanationText    "Window 19 sits at the ramp-up onset of the escalation_attack/mid campaign: traffic rate is ≈6× the stealth baseline, destination-port entropy has begun to broaden, and the entropy-deviation signal ΔH_t exceeds τ_s. The symbolic layer fires on the joint condition ΔH_t > τ_s ∧ a_t > θ before the neural-only configuration alone would, which is the expected behaviour of the Ψ gate during ramp-up." ;
+    psi:evidenceSparql     "ASK { ?w psi:hasEntropySignal/psi:exceedsTauS true ; psi:hasRiskScore/psi:scoreValue ?a . FILTER(?a > 0.70) }" .
+
+psi:Mit_w19 a psi:MitigationHint ;
+    psi:appliesTo          psi:RS_w19_ns ;
+    psi:hintText           "Apply rate-limit on the egress interface toward 192.168.1.1 and trigger an ACL update on the upstream router to drop UDP packets from the offending /24s for the next 10 minutes." ;
+    psi:priority           2 ;
+    psi:referencedCVE      "CVE-2016-10372" .
+
+# ============================================================================
+# Window w27 — saturation phase (both configurations gate)
+# ============================================================================
+
+psi:Window_w27
+    a                    psi:Window ;
+    psi:windowId         27 ;
+    psi:tStart           87.556 ;
+    psi:tEnd             92.556 ;
+    psi:nPackets         4602 ;
+    psi:belongsTo        psi:Scenario_escalation_mid ;
+    psi:hasFeatureVector psi:FV_w27 ;
+    psi:hasEntropySignal psi:ES_w27 ;
+    psi:hasPhase         psi:Phase_Saturation ;
+    psi:hasRiskScore     psi:RS_w27_no, psi:RS_w27_ns .
+
+psi:FV_w27  a psi:FeatureVector ;
+    psi:derivedFrom        psi:Window_w27 ;
+    psi:trafficRatePps     920.4 ;
+    psi:entropyDstPort     7.92 ;
+    psi:entropySrcIp       6.04 ;
+    psi:entropyPayloadSz   3.18 ;
+    psi:stdJitterMs        2.1 .
+
+psi:ES_w27  a psi:EntropySignal ;
+    psi:characterises      psi:Window_w27 ;
+    psi:deltaH             1.83 ;
+    psi:exceedsTauS        true .
+
+psi:RS_w27_no a psi:RiskScore ;
+    psi:assignedTo         psi:Window_w27 ;
+    psi:configuration      "neural-only" ;
+    psi:scoreValue         0.91 ;
+    psi:activated          true ;
+    psi:hasExplanation     psi:Expl_w27_no ;
+    psi:suggests           psi:Mit_w27 .
+
+psi:RS_w27_ns a psi:RiskScore ;
+    psi:assignedTo         psi:Window_w27 ;
+    psi:configuration      "neurosymbolic" ;
+    psi:scoreValue         0.95 ;
+    psi:activated          true ;
+    psi:hasExplanation     psi:Expl_w27_ns ;
+    psi:suggests           psi:Mit_w27 .
+
+psi:Expl_w27_no a psi:Explanation ;
+    psi:explains           psi:RS_w27_no ;
+    psi:references         psi:Phase_Saturation ;
+    psi:generatedAt        "2025-09-12T14:24:42Z"^^xsd:dateTime ;
+    psi:explanationText    "Saturation phase: the neural-only configuration alone exceeds the activation threshold on the instantaneous feature vector. Traffic rate is ≈180× the stealth baseline and inter-packet std collapses to ~2 ms." ;
+    psi:evidenceSparql     "ASK { ?w psi:hasRiskScore/psi:scoreValue ?a . FILTER(?a > 0.70) }" .
+
+psi:Expl_w27_ns a psi:Explanation ;
+    psi:explains           psi:RS_w27_ns ;
+    psi:references         psi:Phase_Saturation ;
+    psi:generatedAt        "2025-09-12T14:24:42Z"^^xsd:dateTime ;
+    psi:explanationText    "Saturation phase: ΔH_t exceeds τ_s and the neurosymbolic activation a_t > θ is reinforced by the prior-window context stored in G_t. The Ψ gate fires with high confidence." ;
+    psi:evidenceSparql     "ASK { ?w psi:hasEntropySignal/psi:exceedsTauS true ; psi:hasRiskScore/psi:scoreValue ?a . FILTER(?a > 0.70) }" .
+
+psi:Mit_w27 a psi:MitigationHint ;
+    psi:appliesTo          psi:RS_w27_ns ;
+    psi:hintText           "Escalate to a black-hole route for the destination /32 and notify upstream peers; apply BCP-38 ingress filtering at the perimeter." ;
+    psi:priority           1 ;
+    psi:referencedCVE      "CVE-2016-10372" .
