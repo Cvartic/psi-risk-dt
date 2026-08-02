@@ -76,7 +76,7 @@ THETA_PRE_GATE: float = 0.5
 #   With f1_max calibrated to the observed dataset peak, a saturation window
 #   with f1 ≈ 90% of max and moderate entropies yields score > 0.70, while a
 #   benign window with f1 < 5% of max stays below 0.50.
-NEURAL_WEIGHTS: list[float] = [0.45, 0.20, 0.15, 0.10, 0.10]
+NEURAL_WEIGHTS: list[float] = [0.25, 0.40, 0.15, 0.10, 0.10]
 assert abs(sum(NEURAL_WEIGHTS) - 1.0) < 1e-9, "Weights must sum to 1"
 
 # Normalisation cap for f1 (traffic_rate_pps); set to peak observed across the
@@ -801,6 +801,115 @@ def run_comparison(
 
 
 # ---------------------------------------------------------------------------
+# PDF figure rendering — risk timeline (used by --save-fig)
+# ---------------------------------------------------------------------------
+
+# Light-tint backgrounds for each phase band on the timeline plot.
+_PHASE_COLOURS: dict[str, str] = {
+    "stealth":    "#F1F5F9",
+    "rampup":     "#FEF3C7",
+    "rampup_low": "#FEF3C7",
+    "saturation": "#FED7AA",
+    "flood":      "#FECACA",
+    "flood_low":  "#FECACA",
+    "burst":      "#FED7AA",
+    "silence":    "#F1F5F9",
+    "baseline":   "#DCFCE7",
+}
+
+
+def render_timeline_figure(
+    timeline: dict[str, list[Any]],
+    scenario: str,
+    tier: str,
+    out_path: Path,
+) -> None:
+    """Render the risk-score timeline for one (scenario, tier) as a PDF.
+
+    The plot stacks the neural-only and neurosymbolic curves on a shared axis,
+    highlights the Ψ-gate activations, and shades each attack phase with a
+    light tint so the reader can see at a glance where the gate fires and
+    where each detection threshold is first crossed.
+    """
+    import matplotlib.pyplot as plt
+
+    neural    = timeline["neural_only"]
+    nesy      = timeline["neurosymbolic"]
+    phases    = timeline["phases"]
+    gate_fired = timeline["gate_fired"]
+    xs = list(range(len(neural)))
+
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=200)
+
+    # ── Phase bands (background tints) ─────────────────────────────────────
+    band_start = 0
+    for i in range(1, len(phases) + 1):
+        if i == len(phases) or phases[i] != phases[band_start]:
+            phase = phases[band_start]
+            colour = _PHASE_COLOURS.get(phase, "#FFFFFF")
+            ax.axvspan(band_start - 0.5, i - 0.5,
+                       facecolor=colour, alpha=0.55, zorder=0)
+            # Phase label centred above the band, inside the plot
+            ax.text((band_start + i - 1) / 2, 1.025, phase,
+                    ha="center", va="bottom", fontsize=8.5,
+                    color="#475569", style="italic")
+            band_start = i
+
+    # ── Threshold reference lines ──────────────────────────────────────────
+    ax.axhline(THETA, color="#DC2626", linestyle="--", linewidth=1.0,
+               alpha=0.75, label=fr"$\theta$ = {THETA:.2f} (detection)")
+    ax.axhline(THETA_PRE_GATE, color="#94A3B8", linestyle=":",
+               linewidth=0.9, alpha=0.6,
+               label=fr"$\theta_{{\mathrm{{pre\_gate}}}}$ = {THETA_PRE_GATE:.2f}")
+
+    # ── Curves ─────────────────────────────────────────────────────────────
+    ax.plot(xs, neural, color="#1E40AF", linewidth=1.6,
+            marker=".", markersize=4, label="Neural-only", zorder=3)
+    ax.plot(xs, nesy, color="#DC2626", linewidth=1.8,
+            marker=".", markersize=4, label="Neurosymbolic", zorder=3)
+
+    # ── Gate-fired markers on the NeSy curve ───────────────────────────────
+    gate_xs = [i for i, g in enumerate(gate_fired) if g]
+    if gate_xs:
+        gate_ys = [nesy[i] for i in gate_xs]
+        ax.scatter(gate_xs, gate_ys, color="#DC2626", marker="o", s=42,
+                   edgecolor="white", linewidth=1.4, zorder=5,
+                   label=r"$\Psi$-gate fired")
+
+    # ── First-detection vertical guides ────────────────────────────────────
+    for series, colour, label in (
+        (neural, "#1E40AF", "neural-only detect"),
+        (nesy,   "#DC2626", "NeSy detect"),
+    ):
+        for i, v in enumerate(series):
+            if v > THETA:
+                ax.axvline(i, color=colour, linestyle=":",
+                           linewidth=0.9, alpha=0.5)
+                ax.text(i, 0.04, f"  ↑ {label} (w{i})",
+                        rotation=90, ha="left", va="bottom",
+                        fontsize=7.5, color=colour)
+                break
+
+    # ── Labels, limits, legend ─────────────────────────────────────────────
+    pretty_scenario = scenario.replace("_", " ")
+    title_tier = tier if tier else "—"
+    ax.set_title(
+        f"Risk timeline — {pretty_scenario}_attack / {title_tier}",
+        fontsize=12, fontweight="bold", pad=12,
+    )
+    ax.set_xlabel("Window index", fontsize=10)
+    ax.set_ylabel("Risk score", fontsize=10)
+    ax.set_xlim(-0.5, len(xs) - 0.5)
+    ax.set_ylim(0.0, 1.07)
+    ax.legend(loc="lower right", fontsize=8.5, framealpha=0.95)
+    ax.grid(True, axis="y", alpha=0.25, linewidth=0.5)
+
+    plt.tight_layout()
+    plt.savefig(out_path, format="pdf", bbox_inches="tight")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
 # Self-test (calibration verification)
 # ---------------------------------------------------------------------------
 
@@ -884,6 +993,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--save-fig",
+        metavar="PATH",
+        default=None,
+        help=(
+            "When used together with --timeline, also write a PDF plot of "
+            "the timeline to PATH (e.g. figures/risk_timeline_escalation_mid.pdf)."
+        ),
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Suppress progress output",
@@ -925,6 +1043,12 @@ def main() -> None:
                 f"{i:>4}  {wid:>20}  {ph:>20}  "
                 f"{no:>12.4f}  {ns:>14.4f}  {str(gf):>10}"
             )
+
+        if args.save_fig:
+            out_path = Path(args.save_fig)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            render_timeline_figure(timeline, scenario, tier, out_path)
+            print(f"\n[psi_comparison] Figure written to: {out_path}")
     else:
         run_comparison(
             data_dir=args.data_dir,
